@@ -1,61 +1,10 @@
 import { Agent } from '@mastra/core/agent';
 import { openai } from '@ai-sdk/openai';
-import { createTool } from '@mastra/core/tools';
-import { z } from 'zod';
 import { Memory } from '@mastra/memory';
 import { LibSQLStore } from '@mastra/libsql';
 import { searchOnlineTool } from '../tools/searchOnlineTool';
-
-
-export const jiraTool = createTool({
-  id: 'jira',
-  description: 'using a url, look up and get additional information from the page',
-  inputSchema: z.object({
-    issueType: z.enum(['story', 'epic']),
-    issueName: z.string().describe('The card id, should be in a format of "JIRA-1234"'),
-    query: z.string().describe('The search query for the page'),
-  }),
-  outputSchema: z.object({
-    results: z.array(z.object({
-      fields: z.object({
-        
-      }),
-    }))
-  }),
-  execute: async () => {
-    console.log('jira');
-    return { results: [
-      {
-        "fields": {
-          "project": { "key": "APP" },
-          "summary": "Design login form UI",
-          "description": "Create responsive login form with email/password fields.",
-          "issuetype": { "name": "Story" },
-          "customfield_10014": "User Auth"
-        }
-      },
-      {
-        "fields": {
-          "project": { "key": "APP" },
-          "summary": "Implement backend login endpoint",
-          "description": "Create API to handle login with JWT session.",
-          "issuetype": { "name": "Story" },
-          "customfield_10014": "User Auth"
-        }
-      },
-      {
-        "fields": {
-          "project": { "key": "APP" },
-          "summary": "Set up session storage in Redis",
-          "description": "Configure Redis to store session tokens securely.",
-          "issuetype": { "name": "Story" },
-          "customfield_10014": "User Auth"
-        }
-      }
-    ] };
-    // return await searchOnlineTool.execute({ });
-  },
-})
+import { githubCreateIssueTool, githubGetIssueTool } from '../tools/github-issue';
+import { githubPagesQueryTool } from '../tools/github-pages';
 
 export const projectManagerAgent = new Agent({
   name: 'Project Manager',
@@ -93,6 +42,9 @@ Always keep communication professional, precise, and flow-optimized. Prioritize 
   tools: { 
     // unionLegalTool,
     searchOnlineTool,
+    githubPagesQueryTool,
+    githubCreateIssueTool,
+    githubGetIssueTool,
   },
   memory: new Memory({
     storage: new LibSQLStore({
@@ -113,6 +65,8 @@ Always keep communication professional, precise, and flow-optimized. Prioritize 
  - jira align id:
 
 ## preferences
+ - github repo owner: [owner, needed for github issue creation]
+ - github repo name: [repo, needed for github issue creation]
 
  - communication style: [eg formal, casual]
  - current project goal:
