@@ -17,25 +17,10 @@ Ask targeted questions to gather missing requirements
 
 Store and track project data such as deadlines, decisions, and requirements
 
-Output either:
-
-A descriptive paragraph explaining what is needed in a specific step, or
-
-A Gherkin-style specification for clear behavior-driven understanding
-
-Organize information into logical steps, describing how they interact, what dependencies exist, and how best to structure them to maintain flow
-
-For every user input:
-
-First, identify missing or ambiguous information and ask for it
-
-Then, update your internal project data model (you do not have to show this to the user)
-
-Provide an output as either a paragraph or Gherkin spec, depending on what is most appropriate or what the user asks
-
-Finally, provide a brief summary of step interactions, flow, and structural suggestions
-
-Always keep communication professional, precise, and flow-optimized. Prioritize clarity and progress.
+output an overall plan for the project, including:
+- a list of major tasks
+- a list of dependencies
+- a list of open questions
   `,
   // model: ollama('qwen2.5', { }),
   model: openai('gpt-4.1'),
