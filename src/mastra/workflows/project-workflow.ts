@@ -20,12 +20,24 @@ const getProjectIdea = createStep({
     idea: z.string(),
     githubRepoOwner: z.string(),
     githubRepoName: z.string(),
+    context: z.any().optional().default(undefined),
+    tasks: z.array(z.string().describe("A Gherkin feature for a major task")).optional().default([]),
+    dependencies: z.array(z.string()).optional().default([]),
+    openQuestions: z.array(z.string()).optional().default([]),
+    answers: z.record(z.string(), z.string()).optional().default({}),
+    technicalNotes: z.string().optional().default(""),
   }),
   execute: async ({ inputData }) => {
     return {
       idea: inputData.idea + (inputData.additionalContext ? `\n\nAdditional Context: ${inputData.additionalContext}` : ""),
       githubRepoOwner: inputData.githubRepoOwner,
       githubRepoName: inputData.githubRepoName,
+      context: undefined,
+      tasks: [],
+      dependencies: [],
+      openQuestions: [],
+      answers: {},
+      technicalNotes: "",
     };
   },
 });
@@ -39,32 +51,40 @@ const projectManagerReview = createStep({
     idea: z.string(),
     githubRepoOwner: z.string(),
     githubRepoName: z.string(),
-    context: z.any().optional(),
-    previousQuestions: z.array(z.string()).optional(),
-    previousAnswers: z.record(z.string(), z.string()).optional(),
+    context: z.any().optional().default(undefined),
+    tasks: z.array(z.string().describe("A Gherkin feature for a major task")).optional().default([]),
+    dependencies: z.array(z.string()).optional().default([]),
+    openQuestions: z.array(z.string()).optional().default([]),
+    answers: z.record(z.string(), z.string()).optional().default({}),
+    technicalNotes: z.string().optional().default(""),
   }),
   outputSchema: z.object({
     idea: z.string(),
     githubRepoOwner: z.string(),
     githubRepoName: z.string(),
-    tasks: z.array(z.string()),
+    context: z.any().optional(),
+    tasks: z.array(z.string().describe("A Gherkin feature for a major task")),
     dependencies: z.array(z.string()),
     openQuestions: z.array(z.string()),
+    answers: z.record(z.string(), z.string()).optional(),
+    technicalNotes: z.string().optional().default(""),
   }),
   execute: async ({ inputData }) => {
-    // Call the project manager agent with the idea, get the tasks, dependencies, and open questions
     const response = await projectManagerAgent.generate(inputData.idea, {
       output: z.object({
-        tasks: z.array(z.string()).describe("A list of major tasks"),
+        tasks: z.array(z.string().describe("A Gherkin feature for a major task")),
         dependencies: z.array(z.string()).describe("A list of dependencies"),
         openQuestions: z.array(z.string()).describe("A list of open questions"),
       }),
+      instructions: `For each task, output it as a Gherkin feature. Example:\nFeature: Implement login\n  As a user\n  I want to log in\n  So that I can access my account\n\n  Scenario: Successful login\n    Given I am on the login page\n    When I enter valid credentials\n    Then I should be redirected to the dashboard`,
     });
-
     return {
       idea: inputData.idea,
       githubRepoOwner: inputData.githubRepoOwner,
       githubRepoName: inputData.githubRepoName,
+      context: inputData.context,
+      answers: inputData.answers,
+      technicalNotes: inputData.technicalNotes,
       ...response.object,
     };
   },
@@ -79,13 +99,12 @@ const engineeringLeadReview = createStep({
     idea: z.string(),
     githubRepoOwner: z.string(),
     githubRepoName: z.string(),
-    context: z.any().optional(),
-    tasks: z.array(z.string()).describe("A list of major tasks"),
-    dependencies: z.array(z.string()).describe("A list of dependencies"),
-    openQuestions: z.array(z.string()).describe("A list of open questions"),
-    userQuestions: z.array(z.string()),
-    answers: z.record(z.string(), z.string()).optional().describe("A list of answers"),
-    technicalNotes: z.string().optional().describe("A list of technical notes"),
+    context: z.any().optional().default(undefined),
+    tasks: z.array(z.string().describe("A Gherkin feature for a major task")).optional().default([]),
+    dependencies: z.array(z.string()).optional().default([]),
+    openQuestions: z.array(z.string()).optional().default([]),
+    answers: z.record(z.string(), z.string()).optional().default({}),
+    technicalNotes: z.string().optional().default(""),
   }),
   outputSchema: z.object({
     idea: z.string(),
@@ -93,38 +112,87 @@ const engineeringLeadReview = createStep({
     githubRepoName: z.string(),
     context: z.any().optional(),
     openQuestions: z.array(z.string()),
-    userQuestions: z.array(z.string()),
     answers: z.record(z.string(), z.string()),
     dataSources: z.array(z.string()),
     technicalNotes: z.string().optional(),
+    tasks: z.array(z.string().describe("A Gherkin feature for a major task")),
+    dependencies: z.array(z.string()),
   }),
   execute: async ({ inputData }) => {
-    // Call the engineering lead agent with the current state
     const response = await engineeringLeadAgent.generate(`${
       inputData.idea}
       Tasks: ${inputData.tasks?.join("\n") || "no tasks yet"}
       Dependencies: ${inputData.dependencies?.join("\n") || "no dependencies yet"}
       Open Questions: ${inputData.openQuestions?.join("\n") || "no open questions yet"}
-      User Questions: ${inputData.userQuestions?.join("\n") || "no user questions yet"}
       Technical Notes: ${inputData.technicalNotes || "no notes yet"}`,
       {
         output: z.object({
           text: z.string(),
           openQuestions: z.array(z.string()),
-          userQuestions: z.array(z.string()),
           dataSources: z.array(z.string()),
           technicalNotes: z.string().optional().describe("A list of technical notes, or answers to questions").default(""),
+          tasks: z.array(z.string().describe("A Gherkin feature for a major task")),
+          dependencies: z.array(z.string()),
         }),
+        instructions: `For each task, output it as a Gherkin feature. Example:\nFeature: Implement login\n  As a user\n  I want to log in\n  So that I can access my account\n\n  Scenario: Successful login\n    Given I am on the login page\n    When I enter valid credentials\n    Then I should be redirected to the dashboard`,
       }
     );
     return {
       idea: inputData.idea,
       githubRepoOwner: inputData.githubRepoOwner,
       githubRepoName: inputData.githubRepoName,
-      ...response.object,
-      answers: inputData.answers || {},
-      technicalNotes: (inputData.technicalNotes || "") + (response.object.technicalNotes || ""),
       context: inputData.context,
+      ...response.object,
+      answers: inputData.answers,
+      technicalNotes: (inputData.technicalNotes || "") + (response.object.technicalNotes || ""),
+    };
+  },
+});
+
+// Merge the outputs of projectManagerReview and engineeringLeadReview
+const mergeReviewsStep = createStep({
+  id: "merge-reviews",
+  description: "Merge the outputs of project manager and engineering lead reviews into a single workflow state.",
+  inputSchema: z.object({
+    "project-manager-review": projectManagerReview.outputSchema,
+    "engineering-lead-review": engineeringLeadReview.outputSchema,
+  }),
+  outputSchema: z.object({
+    idea: z.string(),
+    githubRepoOwner: z.string(),
+    githubRepoName: z.string(),
+    tasks: z.array(z.string().describe("A Gherkin feature for a major task")),
+    dependencies: z.array(z.string()),
+    openQuestions: z.array(z.string()),
+    answers: z.record(z.string(), z.string()),
+    dataSources: z.array(z.string()),
+    technicalNotes: z.string().optional(),
+    context: z.any().optional(),
+  }),
+  execute: async ({ inputData }) => {
+    const pm = inputData["project-manager-review"];
+    const eng = inputData["engineering-lead-review"];
+    const idea = pm.idea || eng.idea;
+    const githubRepoOwner = pm.githubRepoOwner || eng.githubRepoOwner;
+    const githubRepoName = pm.githubRepoName || eng.githubRepoName;
+    const tasks = [...(pm.tasks || []), ...(eng.tasks || [])];
+    const dependencies = [...(pm.dependencies || []), ...(eng.dependencies || [])];
+    const openQuestions = [...(pm.openQuestions || []), ...(eng.openQuestions || [])];
+    const answers = { ...(pm.answers || {}), ...(eng.answers || {}) };
+    const dataSources = [...(eng.dataSources || [])];
+    const technicalNotes = [pm.technicalNotes, eng.technicalNotes].filter(Boolean).join("\n");
+    const context = pm.context || eng.context;
+    return {
+      idea,
+      githubRepoOwner,
+      githubRepoName,
+      tasks,
+      dependencies,
+      openQuestions,
+      answers,
+      dataSources,
+      technicalNotes,
+      context,
     };
   },
 });
@@ -136,13 +204,14 @@ const splitTasksStep = createStep({
     idea: z.string(),
     githubRepoOwner: z.string(),
     githubRepoName: z.string(),
+    context: z.any().optional(),
     tasks: z.array(z.string()),
     openQuestions: z.array(z.string()),
     userQuestions: z.array(z.string()),
     answers: z.record(z.string(), z.string()),
     dataSources: z.array(z.string()),
     technicalNotes: z.string().optional(),
-    context: z.any().optional(),
+    dependencies: z.array(z.string()),
     unAnsweredQuestions: z.array(z.string()).optional().default([]),
   }),
   outputSchema: z.object({
@@ -160,6 +229,7 @@ const splitTasksStep = createStep({
     dataSources: z.array(z.string()),
     technicalNotes: z.string().optional(),
     context: z.any().optional(),
+    dependencies: z.array(z.string()),
     unAnsweredQuestions: z.array(z.string()).optional().default([]),
   }),
   execute: async ({ inputData }) => {
@@ -168,8 +238,7 @@ const splitTasksStep = createStep({
 GitHub Repo Owner: ${inputData.githubRepoOwner}
 GitHub Repo Name: ${inputData.githubRepoName}
 Tasks: ${inputData.tasks.join("\n")}
-Open Questions: ${inputData.openQuestions.join("\n")}
-User Questions: ${inputData.userQuestions.join("\n")}`,
+Open Questions: ${inputData.openQuestions.join("\n")}`,
       { output: z.object({
         createdIssues: z.array(z.object({ title: z.string(), number: z.number(), url: z.string(), type: z.enum(["work", "research"]) })),
         closedIssues: z.array(z.object({ title: z.string(), number: z.number(), url: z.string() })),
@@ -192,6 +261,7 @@ User Questions: ${inputData.userQuestions.join("\n")}`,
       dataSources: inputData.dataSources,
       technicalNotes: inputData.technicalNotes,
       context: inputData.context,
+      dependencies: inputData.dependencies,
       unAnsweredQuestions: inputData.unAnsweredQuestions || [],
     };
   },
@@ -206,11 +276,12 @@ const splitQuestionsStep = createStep({
     githubRepoName: z.string(),
     context: z.any().optional(),
     openQuestions: z.array(z.string()),
-    userQuestions: z.array(z.string()),
     answers: z.record(z.string(), z.string()),
     dataSources: z.array(z.string()),
     technicalNotes: z.string().optional(),
     unAnsweredQuestions: z.array(z.string()).optional().default([]),
+    tasks: z.array(z.string().describe("A Gherkin feature for a major task")),
+    dependencies: z.array(z.string()),
   }),
   outputSchema: z.array(z.object({
     idea: z.string(),
@@ -218,11 +289,12 @@ const splitQuestionsStep = createStep({
     githubRepoName: z.string(),
     context: z.any().optional(),
     question: z.string(),
-    userQuestions: z.array(z.string()),
     answers: z.record(z.string(), z.string()),
     dataSources: z.array(z.string()),
     technicalNotes: z.string().optional(),
     unAnsweredQuestions: z.array(z.string()).optional().default([]),
+    tasks: z.array(z.string().describe("A Gherkin feature for a major task")),
+    dependencies: z.array(z.string()),
   })),
   execute: async ({ inputData }) => {
     return (inputData.openQuestions || []).map(q => ({
@@ -231,11 +303,12 @@ const splitQuestionsStep = createStep({
       githubRepoName: inputData.githubRepoName,
       context: inputData.context,
       question: q,
-      userQuestions: inputData.userQuestions,
       answers: inputData.answers,
       dataSources: inputData.dataSources,
       technicalNotes: inputData.technicalNotes,
       unAnsweredQuestions: inputData.unAnsweredQuestions || [],
+      tasks: inputData.tasks,
+      dependencies: inputData.dependencies,
     }));
   }
 });
@@ -249,11 +322,12 @@ const researchStep = createStep({
     githubRepoName: z.string(),
     context: z.any().optional(),
     question: z.string(),
-    userQuestions: z.array(z.string()),
     answers: z.record(z.string(), z.string()),
     dataSources: z.array(z.string()),
     technicalNotes: z.string().optional(),
     unAnsweredQuestions: z.array(z.string()).optional().default([]),
+    tasks: z.array(z.string().describe("A Gherkin feature for a major task")),
+    dependencies: z.array(z.string()),
   }),
   outputSchema: z.object({
     idea: z.string(),
@@ -261,12 +335,13 @@ const researchStep = createStep({
     githubRepoName: z.string(),
     context: z.any().optional(),
     question: z.string(),
-    userQuestions: z.array(z.string()),
     answer: z.string().optional(),
     couldNotAnswer: z.boolean().optional(),
     dataSources: z.array(z.string()),
     technicalNotes: z.string().optional(),
     unAnsweredQuestions: z.array(z.string()).optional().default([]),
+    tasks: z.array(z.string().describe("A Gherkin feature for a major task")),
+    dependencies: z.array(z.string()),
   }),
   execute: async ({ inputData }) => {
     const response = await researchAgent.generate(
@@ -283,6 +358,8 @@ const researchStep = createStep({
       ...inputData,
       answer: response.object.answer,
       couldNotAnswer: response.object.couldNotAnswer,
+      tasks: inputData.tasks,
+      dependencies: inputData.dependencies,
     };
   },
 });
@@ -296,13 +373,13 @@ const mergeResearchResultsStep = createStep({
     githubRepoName: z.string(),
     context: z.any().optional(),
     question: z.string(),
-    userQuestions: z.array(z.string()),
     answer: z.string().optional(),
     couldNotAnswer: z.boolean().optional(),
     dataSources: z.array(z.string()),
     technicalNotes: z.string().optional(),
     unAnsweredQuestions: z.array(z.string()).optional().default([]),
-    tasks: z.array(z.string()).optional(),
+    tasks: z.array(z.string().describe("A Gherkin feature for a major task")),
+    dependencies: z.array(z.string()),
   })),
   outputSchema: z.object({
     idea: z.string(),
@@ -310,20 +387,19 @@ const mergeResearchResultsStep = createStep({
     githubRepoName: z.string(),
     context: z.any().optional(),
     openQuestions: z.array(z.string()),
-    userQuestions: z.array(z.string()),
     answers: z.record(z.string(), z.string()),
     dataSources: z.array(z.string()),
     technicalNotes: z.string().optional(),
     unAnsweredQuestions: z.array(z.string()).optional().default([]),
-    tasks: z.array(z.string()),
+    tasks: z.array(z.string().describe("A Gherkin feature for a major task")),
+    dependencies: z.array(z.string()),
   }),
   execute: async ({ inputData }) => {
     const answers = {};
     const openQuestions: string[] = [];
     const unAnsweredQuestions: string[] = [];
-    let userQuestions: string[] = [];
     let idea = "";
-    let context, dataSources, technicalNotes, githubRepoOwner, githubRepoName, tasks: string[] = [];
+    let context, dataSources, technicalNotes, githubRepoOwner, githubRepoName, tasks: string[] = [], dependencies: string[] = [];
     for (const result of inputData) {
       idea = result.idea;
       githubRepoOwner = result.githubRepoOwner;
@@ -331,8 +407,8 @@ const mergeResearchResultsStep = createStep({
       context = result.context;
       dataSources = result.dataSources;
       technicalNotes = result.technicalNotes;
-      userQuestions = result.userQuestions;
       if (result.tasks) tasks = result.tasks;
+      if (result.dependencies) dependencies = result.dependencies;
       if (result.answer) {
         answers[result.question] = result.answer;
       } else if (result.couldNotAnswer) {
@@ -346,15 +422,41 @@ const mergeResearchResultsStep = createStep({
       githubRepoName,
       context,
       openQuestions,
-      userQuestions,
       answers,
       dataSources,
       technicalNotes,
       unAnsweredQuestions,
       tasks,
+      dependencies,
     };
   }
 });
+
+// Helper to generate Gherkin body for issues
+const generateGherkinBody = (issue, type) => {
+  if (type === 'work') {
+    return `Feature: ${issue.title}
+  As a developer
+  I want to implement this task
+  So that the project requirements are met
+
+  Scenario: Complete the task
+    Given the project is in progress
+    When I work on "${issue.title}"
+    Then the task should be completed successfully`;
+  } else if (type === 'research') {
+    return `Feature: ${issue.title}
+  As a team member
+  I want to research this question
+  So that we have the necessary information
+
+  Scenario: Research the question
+    Given the question is "${issue.title}"
+    When I investigate it
+    Then I should document the findings in the issue`;
+  }
+  return `Feature: ${issue.title}`;
+};
 
 // Step: Push created issues to GitHub using an agent
 const pushTasksToGitHubStep = createStep({
@@ -380,7 +482,6 @@ const pushTasksToGitHubStep = createStep({
     questionToResearchIssue: z.record(z.string(), z.number()),
     tasks: z.array(z.string()),
     openQuestions: z.array(z.string()),
-    userQuestions: z.array(z.string()),
     answers: z.record(z.string(), z.string()),
     dataSources: z.array(z.string()),
     technicalNotes: z.string().optional(),
@@ -392,12 +493,14 @@ const pushTasksToGitHubStep = createStep({
     const pushedIssues: Array<{ title: string; number: number; url: string; type: "work" | "research"; pushed: boolean; githubUrl?: string }> = [];
     for (const issue of inputData.createdIssues) {
       try {
+        const body = generateGherkinBody(issue, issue.type);
         const result = await githubCreateIssueTool.execute({
           context: {
             owner: inputData.githubRepoOwner,
             repo: inputData.githubRepoName,
             title: issue.title,
-            // Optionally, you could add body, labels, assignees here if available
+            body,
+            // Optionally, you could add labels, assignees here if available
           },
           runtimeContext,
         });
@@ -433,24 +536,20 @@ const outputSummary = createStep({
   description:
     "Output a summary with all resolved info, open questions, and data sources.",
   inputSchema: splitTasksStep.outputSchema,
-  outputSchema: z.object({
-    summary: z.string(),
-  }),
+  outputSchema: z.string(),
   execute: async ({ inputData }) => {
     // Compose a single summary text
-    const summary = [
+    return [
       `Project Idea: ${inputData.idea}`,
       `GitHub Repo: ${inputData.githubRepoOwner}/${inputData.githubRepoName}`,
       inputData.tasks.length ? `Tasks:\n${inputData.tasks.map(t => `- ${t}`).join("\n")}` : '',
       inputData.openQuestions.length ? `Open Questions:\n${inputData.openQuestions.map(q => `- ${q}`).join("\n")}` : '',
-      inputData.userQuestions.length ? `User Questions:\n${inputData.userQuestions.map(q => `- ${q}`).join("\n")}` : '',
       inputData.unAnsweredQuestions.length ? `Unanswered Questions:\n${inputData.unAnsweredQuestions.map(q => `- ${q}`).join("\n")}` : '',
       inputData.technicalNotes ? `Technical Notes:\n${inputData.technicalNotes}` : '',
       inputData.createdIssues.length ? `Created Issues:\n${inputData.createdIssues.map(i => `- [${i.type}] #${i.number}: ${i.title} (${i.url})`).join("\n")}` : '',
       inputData.closedIssues.length ? `Closed Issues:\n${inputData.closedIssues.map(i => `- #${i.number}: ${i.title} (${i.url})`).join("\n")}` : '',
       inputData.remainingIssues.length ? `Remaining Issues:\n${inputData.remainingIssues.map(i => `- [${i.type}] #${i.number}: ${i.title} (${i.url})`).join("\n")}` : '',
     ].filter(Boolean).join("\n\n");
-    return { summary };
   },
 });
 
@@ -469,8 +568,11 @@ export const projectWorkflow = createWorkflow({
   }),
 })
   .then(getProjectIdea)
-  .then(projectManagerReview)
-  .then(engineeringLeadReview)
+  .parallel([
+    projectManagerReview,
+    engineeringLeadReview,
+  ])
+  .then(mergeReviewsStep)
   .then(splitQuestionsStep)
   .foreach(researchStep)
   .then(mergeResearchResultsStep)
