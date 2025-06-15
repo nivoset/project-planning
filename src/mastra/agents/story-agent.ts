@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { Memory } from '@mastra/memory';
 import { LibSQLStore } from '@mastra/libsql';
 import { searchOnlineTool } from '../tools/searchOnlineTool';
+import { githubCreateIssueTool, githubGetIssueTool } from '../tools/github-issue';
+import { githubPagesQueryTool } from '../tools/github-pages';
 
 
 export const jiraTool = createTool({
@@ -56,8 +58,11 @@ export const storyCardAgent = new Agent({
   // model: ollama('qwen2.5', { }),
   model: openai('gpt-4.1'),
   tools: { 
-    // unionLegalTool,
     searchOnlineTool,
+    
+    githubPagesQueryTool,
+    githubCreateIssueTool,
+    githubGetIssueTool,
   },
   memory: new Memory({
     storage: new LibSQLStore({
@@ -84,6 +89,9 @@ export const storyCardAgent = new Agent({
     - [deadline 1]: [Date]
     - [deadline 2]: [Date]
 ## session state
+  current project in github: [repo, owner]
+  current story card in github: [issue, url]
+
  - last story card discussed:
     blockers: [external requirements]
     topic of card:

@@ -40,7 +40,6 @@ Always keep communication professional, precise, and flow-optimized. Prioritize 
   // model: ollama('qwen2.5', { }),
   model: openai('gpt-4.1'),
   tools: { 
-    // unionLegalTool,
     searchOnlineTool,
     githubPagesQueryTool,
     githubCreateIssueTool,
