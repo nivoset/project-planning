@@ -8,6 +8,7 @@ import { prioritizeFlowAgent } from '../agents/prioritize-flow-agent';
 import { spotGapsAgent } from '../agents/spot-gaps-agent';
 import { sliceReleasesAgent } from '../agents/slice-releases-agent';
 import { collaborateAgent } from '../agents/collaborate-agent';
+import { iterateRefineAgent } from '../agents/iterate-refine-agent';
 
 // --- Zod Schemas for each step ---
 
@@ -179,13 +180,13 @@ const outputNeedsStep = createStep({
   inputSchema: FrameProblemSchema,
   outputSchema: OutputNeedsSchema,
   execute: async ({ inputData, suspend }) => {
-    if ((inputData.majorQuestions?.length ?? 0) > 0) {
-      await suspend({
-        inputData: {
-          majorQuestions: inputData.majorQuestions,
-        },
-      });
-    }
+    // if ((inputData.majorQuestions?.length ?? 0) > 0) {
+    //   await suspend({
+    //     inputData: {
+    //       majorQuestions: inputData.majorQuestions,
+    //     },
+    //   });
+    // }
 
     let summary = '';
     if ((inputData.majorQuestions?.length ?? 0) > 0) {
@@ -273,9 +274,12 @@ const prioritizeFlowStep = createStep({
       ${inputData.personas.map(persona => `Persona: ${persona.name} - ${persona.description}`).join('\n')}
       ${inputData.goalStatement}
       `, {
-      output: PrioritizedStoriesSchema,
+      output: PrioritizedStoriesSchema.pick({ prioritizedStories: true }),
     });
-    return result.object;
+    return {
+      ...inputData,
+      ...result.object,
+    };
   },
 });
 
@@ -283,7 +287,7 @@ const spotGapsStep = createStep({
   id: 'spot-gaps',
   description: 'Spot gaps, dependencies, and risks.',
   inputSchema: PrioritizedStoriesSchema,
-  outputSchema: GapsDependenciesSchema,
+  outputSchema: GapsDependenciesSchema.and(PrioritizedStoriesSchema),
   execute: async ({ inputData }) => {
     const result = await spotGapsAgent.generate(`
       ${inputData.prioritizedStories.map(prioritizedStory => `Prioritized Story: ${prioritizedStory.activity} - ${prioritizedStory.stories.join('\n')}`).join('\n')}
@@ -292,15 +296,18 @@ const spotGapsStep = createStep({
       `, {
       output: GapsDependenciesSchema,
     });
-    return result.object;
+    return { 
+      ...inputData,
+      ...result.object
+    };
   },
 });
 
 const sliceReleasesStep = createStep({
   id: 'slice-releases',
   description: 'Slice into releases or sprints.',
-  inputSchema: GapsDependenciesSchema,
-  outputSchema: SlicesSchema,
+  inputSchema: GapsDependenciesSchema.and(PrioritizedStoriesSchema),
+  outputSchema: SlicesSchema.and(PrioritizedStoriesSchema),
   execute: async ({ inputData }) => {
     const result = await sliceReleasesAgent.generate(`
       ${inputData.prioritizedStories.map(prioritizedStory => `Prioritized Story: ${prioritizedStory.activity} - ${prioritizedStory.stories.join('\n')}`).join('\n')}
@@ -309,56 +316,71 @@ const sliceReleasesStep = createStep({
       `, {
       output: SlicesSchema,
     });
-    return result.object;
+    return {
+      ...inputData,
+        ...result.object
+      };
   },
 });
 
 const collaborateStep = createStep({
   id: 'collaborate',
   description: 'Collaborate and facilitate.',
-  inputSchema: SlicesSchema,
-  outputSchema: CollaborationSchema,
+  inputSchema: SlicesSchema.and(PrioritizedStoriesSchema),
+  outputSchema: CollaborationSchema.and(PrioritizedStoriesSchema),
   execute: async ({ inputData }) => {
     const result = await collaborateAgent.generate(`
       ${inputData.releases.map(release => `Release: ${release.name} - ${release.stories.join('\n')}`).join('\n')}
-      ${inputData.personas.map(persona => `Persona: ${persona.name} - ${persona.description}`).join('\n')}
+      
       ${inputData.goalStatement}
       `, {
       output: CollaborationSchema,
     });
-    return result.object;
-  },
-});
-
-const timeboxStep = createStep({
-  id: 'timebox',
-  description: 'Time-box sessions.',
-  inputSchema: CollaborationSchema,
-  outputSchema: TimeboxSchema,
-  execute: async ({ inputData }) => {
-    // TODO: LLM logic for time-boxing
-    return { sessionBlocks: [], participants: inputData.participants, facilitator: inputData.facilitator, releases: inputData.releases, goalStatement: inputData.goalStatement };
+    return {
+      ...inputData,
+      ...result.object
+    };
   },
 });
 
 const iterateRefineStep = createStep({
   id: 'iterate-refine',
   description: 'Iterate and refine the map.',
-  inputSchema: TimeboxSchema,
-  outputSchema: IterationSchema,
+  inputSchema: CollaborationSchema.and(PrioritizedStoriesSchema),
+  outputSchema: IterationSchema.and(PrioritizedStoriesSchema),
   execute: async ({ inputData }) => {
-    // TODO: LLM logic for iteration/refinement
-    return { updatedMap: '', sessionBlocks: inputData.sessionBlocks, participants: inputData.participants, facilitator: inputData.facilitator, releases: inputData.releases, goalStatement: inputData.goalStatement };
+    const result = await iterateRefineAgent.generate(`
+      ${inputData.releases.map(release => `Release: ${release.name} - ${release.stories.join('\n')}`).join('\n')}
+      ${inputData.goalStatement}
+      `, {
+      output: IterationSchema,
+    });
+    return {
+      ...inputData,
+      ...result.object
+    };
   },
 });
 
 const fullStoryMappingStep = createStep({
   id: 'full-story-mapping',
   description: 'Output of data.',
-  inputSchema: IterationSchema,
+  inputSchema: IterationSchema.and(PrioritizedStoriesSchema),
   outputSchema: z.string(),
-  execute: async ({ inputData, ...context }) => {
-    return JSON.stringify(inputData, null, 2);
+  execute: async ({ inputData }) => {
+    return `Goal: ${inputData.goalStatement}
+
+${inputData.releases.map(release => `Release: ${release.name} - ${release.stories.join('\n')}`).join('\n')}
+
+${inputData.facilitator}
+
+${inputData.updatedMap}
+
+Stories:
+${inputData.activityStories.map(prioritizedStory => 
+    `Activity: ${prioritizedStory.activity} -
+${prioritizedStory.stories.map(story => `           Story: ${story}`).join('\n')}`).join('\n')}
+    `;
   },
 });
 
@@ -366,7 +388,7 @@ const fullStoryMappingStep = createStep({
 
 export const storyMappingWorkflow = createWorkflow({
   id: 'story-mapping-workflow',
-  inputSchema: z.object({ goalStatement: z.string() }),
+  inputSchema: FrameProblemSchema,
   outputSchema: z.union([OutputNeedsSchema, WorkflowOutputSchema]),
 })
   .then(frameProblemStep)
@@ -381,9 +403,8 @@ export const storyMappingWorkflow = createWorkflow({
   .then(spotGapsStep)
   .then(sliceReleasesStep)
   .then(collaborateStep)
-  .then(timeboxStep)
   .then(iterateRefineStep)
   .then(fullStoryMappingStep)
 
 // Optionally, commit the workflow if required by the framework
-// storyMappingWorkflow.commit();
+storyMappingWorkflow.commit();
