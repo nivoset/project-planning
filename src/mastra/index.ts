@@ -9,9 +9,10 @@ import { projectManagerAgent } from './agents/project-manager';
 import { engineeringLeadAgent } from './agents/engineering-lead-agent';
 import { projectWorkflow } from './workflows/project-workflow';
 import { storyMappingWorkflow } from './workflows/story-mapping';
+import { epicMappingWorkflow } from './workflows/epic-mapping';
 
 export const mastra = new Mastra({
-  workflows: { weatherWorkflow, projectWorkflow, storyMappingWorkflow },
+  workflows: { weatherWorkflow, projectWorkflow, storyMappingWorkflow, epicMappingWorkflow },
   agents: {
     storyCardAgent,
     weatherAgent,
