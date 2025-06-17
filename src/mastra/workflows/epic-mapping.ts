@@ -129,11 +129,9 @@ const gatherStep = createStep({
     integration: PlanSectionOutputSchema,
     testing: PlanSectionOutputSchema,
   }),
-  outputSchema: z.object({ document: z.string() }),
+  outputSchema: z.string(),
   execute: async ({ inputData }) => {
-    return {
-      document: `# Epic Mapping Document\n\n${Object.entries(inputData).map(([section, { description, gherkinRequirements }]) => `## ${section.charAt(0).toUpperCase() + section.slice(1)}\n${description}\n\n### Gherkin Requirements\n${gherkinRequirements.map(req => `- ${req}`).join('\n')}`).join('\n\n')}`
-    };
+    return  `# Epic Mapping Document\n\n${Object.entries(inputData).map(([section, { description, gherkinRequirements }]) => `## ${section.charAt(0).toUpperCase() + section.slice(1)}\n${description}\n\n### Gherkin Requirements\n${gherkinRequirements.map(req => `- ${req}`).join('\n')}`).join('\n\n')}`
   },
 });
 
