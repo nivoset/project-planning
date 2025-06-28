@@ -1,4 +1,3 @@
-
 import { Mastra } from '@mastra/core/mastra';
 import { PinoLogger } from '@mastra/loggers';
 import { LibSQLStore } from '@mastra/libsql';
@@ -11,6 +10,7 @@ import { projectWorkflow } from './workflows/project-workflow';
 import { storyMappingWorkflow } from './workflows/story-mapping';
 import { epicMappingWorkflow } from './workflows/epic-mapping';
 import { roleContributionsWorkflow } from './workflows/role-contributions';
+import { informationAgent } from './agents/story-mapping-entry-agent';
 
 export const mastra = new Mastra({
   workflows: {
@@ -25,6 +25,7 @@ export const mastra = new Mastra({
     weatherAgent,
     projectManagerAgent,
     engineeringLeadAgent,
+    informationAgent,
   },
   storage: new LibSQLStore({
     // stores telemetry, evals, ... into memory storage, if it needs to persist, change to file:../mastra.db

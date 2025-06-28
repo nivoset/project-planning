@@ -11,6 +11,21 @@ export const RoleContributionSchema = z.object({
 
 const EpicInputSchema = z.object({ epicStatement: z.string() });
 
+// Vector store schema
+const VectorStoreSchema = z.object({
+  embeddings: z.array(z.object({
+    id: z.string(),
+    text: z.string(),
+    role: z.string(),
+    embedding: z.array(z.number()),
+  })),
+  metadata: z.object({
+    epicStatement: z.string(),
+    totalContributions: z.number(),
+    roles: z.array(z.string()),
+  }),
+});
+
 // --- Agent stubs for each role with detailed instructions ---
 const productOwnerAgent = new Agent({
   name: 'Product Owner / Manager Agent',
@@ -271,28 +286,149 @@ const recordToArray = createStep({
   execute: async ({ inputData }) => Object.values(inputData),
 });
 
-// Final gather step
-const gatherFinal = createStep({
-  id: 'gather-final',
-  
+// Vector store step
+const createVectorStore = createStep({
+  id: 'create-vector-store',
   inputSchema: z.record(z.string(), z.object({
     epicStatement: z.string(),
     allResponses: z.record(z.string(), RoleContributionSchema),
     previous: RoleContributionSchema,
   })),
-  // inputSchema: z.object({
-  //   epicStatement: z.string(),
-  //   responses: z.record(z.string(), RoleContributionSchema),
-  // }),
+  outputSchema: VectorStoreSchema,
+  execute: async ({ inputData }) => {
+    // Create embeddings for each role contribution
+    const embeddings = [];
+    const roles = Object.keys(inputData);
+    
+    for (const [role, data] of Object.entries(inputData)) {
+      // For now, create a simple embedding (you can replace with actual embedding API)
+      const contribution = data.previous.contribution;
+      const embedding = Array.from({ length: 1536 }, () => Math.random()); // Placeholder embedding
+      
+      embeddings.push({
+        id: `${role}-${Date.now()}`,
+        text: contribution,
+        role: role,
+        embedding: embedding,
+      });
+    }
+    
+    return {
+      embeddings,
+      metadata: {
+        epicStatement: Object.values(inputData)[0]?.epicStatement || '',
+        totalContributions: embeddings.length,
+        roles: roles,
+      },
+    };
+  },
+});
+
+// Final gather step with vector store
+const gatherFinal = createStep({
+  id: 'gather-final',
+  inputSchema: z.object({
+    markdown: z.string(),
+    vectorStore: VectorStoreSchema,
+  }),
+  outputSchema: z.object({
+    document: z.string(),
+    vectorStore: VectorStoreSchema,
+  }),
+  execute: async ({ inputData }) => ({
+    document: inputData.markdown,
+    vectorStore: inputData.vectorStore,
+  }),
+});
+
+// Markdown generation step
+const generateMarkdown = createStep({
+  id: 'generate-markdown',
+  inputSchema: z.record(z.string(), z.object({
+    epicStatement: z.string(),
+    allResponses: z.record(z.string(), RoleContributionSchema),
+    previous: RoleContributionSchema,
+  })),
   outputSchema: z.string(),
   execute: async ({ inputData }) =>
     `# Role Contributions\n\n${Object.values(inputData).map(({ previous }) => `## ${previous.role}\n${previous.contribution}`).join('\n\n')}`,
 });
 
+// After each .parallel([...]), insert a mapping step to convert the array to an object with named keys
+
+const arrayToRoleObject = createStep({
+  id: 'array-to-role-object',
+  inputSchema: z.array(RoleContributionSchema),
+  outputSchema: z.object({
+    epicStatement: z.string(),
+    productOwner: RoleContributionSchema,
+    facilitator: RoleContributionSchema,
+    developer: RoleContributionSchema,
+    ux: RoleContributionSchema,
+    qa: RoleContributionSchema,
+    analyst: RoleContributionSchema,
+    marketing: RoleContributionSchema,
+    support: RoleContributionSchema,
+    sponsor: RoleContributionSchema,
+    devops: RoleContributionSchema,
+  }),
+  execute: async ({ inputData }) => {
+    // The order must match the order of the parallel steps
+    return {
+      epicStatement: inputData[0]?.epicStatement || '',
+      productOwner: inputData[0],
+      facilitator: inputData[1],
+      developer: inputData[2],
+      ux: inputData[3],
+      qa: inputData[4],
+      analyst: inputData[5],
+      marketing: inputData[6],
+      support: inputData[7],
+      sponsor: inputData[8],
+      devops: inputData[9],
+    };
+  },
+});
+
+// For feedback rounds, the input/output schemas are different, so create a similar step for feedback
+const arrayToRoleObjectFeedback = createStep({
+  id: 'array-to-role-object-feedback',
+  inputSchema: z.array(RoleContributionSchema),
+  outputSchema: z.object({
+    productOwner: RoleContributionSchema,
+    facilitator: RoleContributionSchema,
+    developer: RoleContributionSchema,
+    ux: RoleContributionSchema,
+    qa: RoleContributionSchema,
+    analyst: RoleContributionSchema,
+    marketing: RoleContributionSchema,
+    support: RoleContributionSchema,
+    sponsor: RoleContributionSchema,
+    devops: RoleContributionSchema,
+  }),
+  execute: async ({ inputData }) => {
+    return {
+      productOwner: inputData[0],
+      facilitator: inputData[1],
+      developer: inputData[2],
+      ux: inputData[3],
+      qa: inputData[4],
+      analyst: inputData[5],
+      marketing: inputData[6],
+      support: inputData[7],
+      sponsor: inputData[8],
+      devops: inputData[9],
+    };
+  },
+});
+
 export const roleContributionsWorkflow = createWorkflow({
   id: 'role-contributions-workflow',
   inputSchema: EpicInputSchema,
-  outputSchema: z.string(),
+  outputSchema: z.object({
+    document: z.string(),
+    vectorStore: VectorStoreSchema,
+  }),
 })
 .parallel([
   productOwnerStep,
@@ -306,7 +442,47 @@ export const roleContributionsWorkflow = createWorkflow({
   sponsorStep,
   devopsStep,
 ])
+.then(arrayToRoleObject)
 .then(wrapParallelOutput)
 .then(gatherForFeedback)
 .then(fanOutForFeedback)
-.then(gatherFinal); 
+// Feedback round 1
+.parallel([
+  productOwnerFeedbackStep,
+  facilitatorFeedbackStep,
+  developerFeedbackStep,
+  uxFeedbackStep,
+  qaFeedbackStep,
+  analystFeedbackStep,
+  marketingFeedbackStep,
+  supportFeedbackStep,
+  sponsorFeedbackStep,
+  devopsFeedbackStep,
+])
+.then(arrayToRoleObjectFeedback)
+.then(wrapParallelOutput)
+.then(gatherForFeedback)
+.then(fanOutForFeedback)
+// Feedback round 2
+.parallel([
+  productOwnerFeedbackStep,
+  facilitatorFeedbackStep,
+  developerFeedbackStep,
+  uxFeedbackStep,
+  qaFeedbackStep,
+  analystFeedbackStep,
+  marketingFeedbackStep,
+  supportFeedbackStep,
+  sponsorFeedbackStep,
+  devopsFeedbackStep,
+])
+.then(arrayToRoleObjectFeedback)
+.then(wrapParallelOutput)
+// Final output
+.parallel([
+  generateMarkdown,
+  createVectorStore,
+])
+.then(gatherFinal);
+
+roleContributionsWorkflow.commit(); 

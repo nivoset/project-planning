@@ -137,6 +137,7 @@ const gatherStep = createStep({
 
 export const epicMappingWorkflow = createWorkflow({
   id: 'epic-mapping-workflow',
+  description: 'Map an epic to a set of user stories.',
   inputSchema: EpicInputSchema,
   outputSchema: z.object({ document: z.string() }),
 })
