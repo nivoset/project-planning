@@ -5,6 +5,7 @@ import { openai } from '@ai-sdk/openai';
 
 // Unified schema for all role contributions
 export const RoleContributionSchema = z.object({
+  epicStatement: z.string().nullish(),
   role: z.string(),
   contribution: z.string(),
 });
@@ -297,7 +298,7 @@ const createVectorStore = createStep({
   outputSchema: VectorStoreSchema,
   execute: async ({ inputData }) => {
     // Create embeddings for each role contribution
-    const embeddings = [];
+    const embeddings: { id: string, text: string, role: string, embedding: number[] }[] = [];
     const roles = Object.keys(inputData);
     
     for (const [role, data] of Object.entries(inputData)) {
