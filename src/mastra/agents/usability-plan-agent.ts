@@ -14,6 +14,8 @@ export const usabilityPlanAgent = new Agent({
     Then output all requirements as Gherkin scenarios in an array.
     Output as: { description: string, gherkinRequirements: string[] }
   `,
+  description: ``,
   model: openai('gpt-4.1'),
   tools: {},
 }); 
+

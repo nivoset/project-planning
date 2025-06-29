@@ -2,7 +2,6 @@ import { Agent } from '@mastra/core/agent';
 import { openai } from '@ai-sdk/openai';
 import { epicMappingWorkflow } from '../workflows/epic-mapping';
 import { projectWorkflow } from '../workflows/project-workflow';
-import { roleContributionsWorkflow } from '../workflows/role-contributions';
 import { storyMappingWorkflow } from '../workflows/story-mapping';
 import { weatherWorkflow } from '../workflows/weather-workflow';
 import { Memory } from '@mastra/memory';
@@ -60,7 +59,6 @@ When a user asks about epics or issues in 'that project', use the stored 'curren
     projectWorkflow,
     storyMappingWorkflow,
     epicMappingWorkflow,
-    roleContributionsWorkflow,
   }
 });
 
